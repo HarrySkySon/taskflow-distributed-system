@@ -1,0 +1,89 @@
+@startuml UserRegistration_Sequence
+
+title Реєстрація користувача та відправка email підтвердження
+
+actor "User" as User
+participant "API Gateway" as Gateway
+participant "Users Service" as Users
+participant "Users DB" as UsersDB
+participant "RabbitMQ" as MQ
+participant "Notifications\nService" as Notifications
+participant "Notifications DB" as NotifDB
+participant "Email Sender" as Email
+participant "SMTP Server" as SMTP
+
+User -> Gateway: POST /api/auth/register\n{email, password, first_name, last_name}
+activate Gateway
+
+Gateway -> Users: POST /auth/register
+activate Users
+
+' Check if email already exists
+Users -> UsersDB: SELECT * FROM users\nWHERE email = ?
+activate UsersDB
+UsersDB --> Users: No user found
+deactivate UsersDB
+
+' Hash password
+Users -> Users: bcrypt.hash(password, 10)
+
+' Create user
+Users -> UsersDB: INSERT INTO users\n(email, password_hash, first_name, last_name,\nis_verified=false)
+activate UsersDB
+UsersDB --> Users: User Created\n{user_id: 456}
+deactivate UsersDB
+
+' Generate verification token
+Users -> Users: jwt.sign({user_id, email}, secret,\n{expiresIn: '24h'})
+
+Users -> UsersDB: INSERT INTO email_verifications\n(user_id, token, expires_at)
+activate UsersDB
+UsersDB --> Users: Token Saved
+deactivate UsersDB
+
+' Publish event
+Users -> MQ: Publish Event\n{event: "user.registered",\nuser_id: 456, email, first_name,\nverification_token}
+activate MQ
+MQ --> Users: Event Published
+deactivate MQ
+
+Users --> Gateway: 201 Created\n{user_id: 456, email, is_verified: false}
+deactivate Users
+
+Gateway --> User: 201 Created\n{user_id: 456, message: "Check your email"}
+deactivate Gateway
+
+' Asynchronous notification
+MQ -> Notifications: Consume Event\n{event: "user.registered", ...}
+activate Notifications
+
+Notifications -> NotifDB: INSERT INTO notifications\n(user_id, type: 'email_verification', ...)
+activate NotifDB
+NotifDB --> Notifications: Stored
+deactivate NotifDB
+
+Notifications -> Email: Send Verification Email\n(to: email, token: ...)
+activate Email
+
+Email -> SMTP: SMTP Send\n(subject: "Verify your email",\nbody: "Click link: .../verify?token=...")
+activate SMTP
+SMTP --> Email: Email Sent
+deactivate SMTP
+
+Email --> Notifications: Email Delivered
+deactivate Email
+
+Notifications -> NotifDB: UPDATE notifications\nSET sent_at = NOW()
+activate NotifDB
+NotifDB --> Notifications: Updated
+deactivate NotifDB
+
+deactivate Notifications
+
+note right of MQ
+  Асинхронна обробка
+  Users Service не чекає
+  на відправку email
+end note
+
+@enduml

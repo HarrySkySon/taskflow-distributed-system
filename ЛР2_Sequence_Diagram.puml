@@ -1,0 +1,107 @@
+@startuml TaskFlow_CreateTask_Sequence
+
+title Sequence Diagram - Create Task and Send Notification
+
+actor "User" as User
+participant "API Gateway" as Gateway
+participant "Auth Middleware" as Auth
+participant "Tasks Service" as Tasks
+participant "Projects Service" as Projects
+participant "Users Service" as Users
+participant "Tasks DB" as TasksDB
+participant "RabbitMQ" as MQ
+participant "Notifications\nService" as Notifications
+participant "Notifications DB" as NotifDB
+participant "Email Sender" as Email
+participant "SMTP Server" as SMTP
+
+User -> Gateway: POST /api/tasks\n{title, description, project_id, assigned_to, ...}\nAuthorization: Bearer <JWT>
+activate Gateway
+
+Gateway -> Auth: Validate JWT Token
+activate Auth
+Auth --> Gateway: Token Valid\n{user_id, role}
+deactivate Auth
+
+Gateway -> Tasks: POST /tasks\n{user_id, title, description, ...}
+activate Tasks
+
+' Validate project exists
+Tasks -> Projects: GET /projects/{project_id}/validate
+activate Projects
+Projects --> Tasks: {project_exists: true, project_name: "TaskFlow"}
+deactivate Projects
+
+' Validate assigned user exists
+Tasks -> Users: GET /users/{assigned_to}/validate
+activate Users
+Users --> Tasks: {user_exists: true, email: "dev@example.com"}
+deactivate Users
+
+' Create task
+Tasks -> TasksDB: INSERT INTO tasks\n(title, description, project_id, ...)
+activate TasksDB
+TasksDB --> Tasks: Task Created\n{task_id: 123}
+deactivate TasksDB
+
+' Publish event to RabbitMQ
+Tasks -> MQ: Publish Event\n{event: "task.created", task_id: 123,\nassigned_to: user_id, project_id: 1}
+activate MQ
+MQ --> Tasks: Event Published
+deactivate MQ
+
+Tasks --> Gateway: 201 Created\n{task_id: 123, title: "...", status: "new"}
+deactivate Tasks
+
+Gateway --> User: 201 Created\n{task_id: 123, ...}
+deactivate Gateway
+
+' Asynchronous notification flow
+MQ -> Notifications: Consume Event\n{event: "task.created", task_id: 123}
+activate Notifications
+
+Notifications -> Users: GET /users/{assigned_to}
+activate Users
+Users --> Notifications: {email: "dev@example.com", first_name: "John"}
+deactivate Users
+
+' Store notification in DB
+Notifications -> NotifDB: INSERT INTO notifications\n(user_id, type, title, message, ...)
+activate NotifDB
+NotifDB --> Notifications: Notification Stored
+deactivate NotifDB
+
+' Send email
+Notifications -> Email: Send Email\n(to: dev@example.com, subject: "New Task Assigned")
+activate Email
+
+Email -> SMTP: SMTP Send\n(to, from, subject, body)
+activate SMTP
+SMTP --> Email: Email Sent
+deactivate SMTP
+
+Email --> Notifications: Email Delivered
+deactivate Email
+
+Notifications -> NotifDB: UPDATE notifications\nSET sent_at = NOW()
+activate NotifDB
+NotifDB --> Notifications: Updated
+deactivate NotifDB
+
+deactivate Notifications
+
+note right of MQ
+  Асинхронна обробка
+  Сервіс Tasks не чекає
+  на відправку нотифікації
+end note
+
+note right of Notifications
+  Notifications Service
+  підписаний на події:
+  - task.created
+  - task.assigned
+  - task.status_changed
+end note
+
+@enduml

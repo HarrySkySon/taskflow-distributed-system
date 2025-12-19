@@ -1,0 +1,174 @@
+{
+  "info": {
+    "name": "Projects Service API",
+    "description": "API endpoints для Projects Service мікросервісу системи TaskFlow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:4002/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Get All Projects",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:4002/api/projects?limit=10&offset=0",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["api", "projects"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            },
+            {
+              "key": "owner_id",
+              "value": "1",
+              "disabled": true
+            },
+            {
+              "key": "status",
+              "value": "active",
+              "disabled": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Project by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:4002/api/projects/1?include_members=true",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["api", "projects", "1"],
+          "query": [
+            {
+              "key": "include_members",
+              "value": "true"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create Project",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"TaskFlow Platform Development\",\n  \"description\": \"Розробка платформи управління проєктами TaskFlow\",\n  \"owner_id\": 1,\n  \"priority\": \"high\",\n  \"start_date\": \"2025-01-01\",\n  \"deadline\": \"2025-06-30\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:4002/api/projects",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["api", "projects"]
+        }
+      }
+    },
+    {
+      "name": "Update Project",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"in_progress\",\n  \"priority\": \"high\",\n  \"description\": \"Оновлений опис проєкту\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:4002/api/projects/1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["api", "projects", "1"]
+        }
+      }
+    },
+    {
+      "name": "Delete Project",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:4002/api/projects/1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["api", "projects", "1"]
+        }
+      }
+    },
+    {
+      "name": "Add Project Member",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": 2,\n  \"role\": \"developer\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:4002/api/projects/1/members",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["api", "projects", "1", "members"]
+        }
+      }
+    },
+    {
+      "name": "Remove Project Member",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:4002/api/projects/1/members/2",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "4002",
+          "path": ["api", "projects", "1", "members", "2"]
+        }
+      }
+    }
+  ]
+}

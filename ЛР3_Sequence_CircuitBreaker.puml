@@ -1,0 +1,110 @@
+@startuml ErrorHandling_CircuitBreaker
+
+title Обробка помилки з використанням Circuit Breaker
+
+actor "User" as User
+participant "API Gateway" as Gateway
+participant "Tasks Service" as Tasks
+participant "Circuit Breaker" as CB
+participant "Projects Service" as Projects
+
+User -> Gateway: POST /api/tasks\n{title, project_id: 999, ...}
+activate Gateway
+
+Gateway -> Tasks: POST /tasks
+activate Tasks
+
+' Circuit Breaker checks state
+Tasks -> CB: Call Projects Service\nthrough Circuit Breaker
+activate CB
+
+CB -> CB: Check Circuit State:\nCLOSED | OPEN | HALF_OPEN
+
+alt Circuit is CLOSED
+    CB -> Projects: GET /projects/999/validate
+    activate Projects
+
+    alt Projects Service is down (timeout)
+        Projects --x CB: Timeout (5s)
+
+        CB -> CB: Increment failure counter\nFailures: 4/5 threshold
+
+        note right of CB
+          Circuit Breaker tracks failures
+          Threshold: 5 failures in 60s
+          Timeout: 30s when OPEN
+        end note
+
+        CB --> Tasks: Error: Service Unavailable
+        deactivate CB
+
+        Tasks --> Gateway: 503 Service Unavailable\n{error: "Projects Service is unavailable"}
+        deactivate Tasks
+
+        Gateway --> User: 503 Service Unavailable\n{error: "Cannot validate project", retry: true}
+        deactivate Gateway
+
+    else Projects Service responds
+        Projects --> CB: 404 Not Found\n{error: "Project not found"}
+        deactivate Projects
+
+        CB --> Tasks: 404 Not Found
+        deactivate CB
+
+        Tasks --> Gateway: 400 Bad Request\n{error: "Project does not exist"}
+        deactivate Tasks
+
+        Gateway --> User: 400 Bad Request\n{error: "Invalid project_id"}
+        deactivate Gateway
+    end
+
+else Circuit is OPEN
+    CB -> CB: Check if timeout expired\n(30 seconds since opening)
+
+    alt Timeout not expired
+        CB --> Tasks: Error: Circuit is OPEN\n(Service is down, fast fail)
+        deactivate CB
+
+        Tasks --> Gateway: 503 Service Unavailable\n{error: "Projects Service is temporarily unavailable"}
+        deactivate Tasks
+
+        Gateway --> User: 503 Service Unavailable\n{error: "Service unavailable, try again later"}
+        deactivate Gateway
+
+    else Timeout expired - try HALF_OPEN
+        CB -> CB: Set state to HALF_OPEN
+
+        CB -> Projects: GET /projects/999/validate\n(test request)
+        activate Projects
+
+        alt Request succeeds
+            Projects --> CB: 200 OK
+            deactivate Projects
+
+            CB -> CB: Set state to CLOSED\nReset failure counter
+
+            CB --> Tasks: 200 OK\n{project_exists: true}
+            deactivate CB
+
+            Tasks --> Gateway: Continue processing...
+            deactivate Tasks
+
+        else Request fails
+            Projects --x CB: Timeout
+            deactivate Projects
+
+            CB -> CB: Set state back to OPEN\nReset timeout
+
+            CB --> Tasks: Error: Service still unavailable
+            deactivate CB
+
+            Tasks --> Gateway: 503 Service Unavailable
+            deactivate Tasks
+
+            Gateway --> User: 503 Service Unavailable
+            deactivate Gateway
+        end
+    end
+end
+
+@enduml

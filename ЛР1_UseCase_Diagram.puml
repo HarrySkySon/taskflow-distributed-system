@@ -1,0 +1,98 @@
+@startuml TaskFlow_UseCase_Diagram
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Адміністратор" as Admin
+actor "Менеджер проєктів" as PM
+actor "Розробник" as Dev
+actor "Спостерігач" as Observer
+actor "Email Service" as Email
+actor "Calendar Service" as Calendar
+
+rectangle "TaskFlow System" {
+  ' Управління користувачами
+  usecase "Реєстрація користувачів" as UC1
+  usecase "Аутентифікація" as UC2
+  usecase "Управління користувачами" as UC3
+  usecase "Призначення ролей" as UC4
+
+  ' Управління проєктами
+  usecase "Створення проєкту" as UC5
+  usecase "Редагування проєкту" as UC6
+  usecase "Додавання членів команди" as UC7
+  usecase "Видалення проєкту" as UC8
+
+  ' Управління задачами
+  usecase "Створення задачі" as UC9
+  usecase "Призначення виконавця" as UC10
+  usecase "Зміна статусу задачі" as UC11
+  usecase "Зміна пріоритету" as UC12
+  usecase "Додавання коментарів" as UC13
+  usecase "Прикріплення файлів" as UC14
+
+  ' Аналітика
+  usecase "Перегляд дашборду" as UC15
+  usecase "Генерація звітів" as UC16
+  usecase "Експорт звітів" as UC17
+
+  ' Нотифікації та інтеграції
+  usecase "Відправка нотифікацій" as UC18
+  usecase "Синхронізація з календарем" as UC19
+
+  ' Перегляд
+  usecase "Перегляд проєктів" as UC20
+  usecase "Перегляд задач" as UC21
+}
+
+' Адміністратор
+Admin --> UC3
+Admin --> UC4
+Admin --> UC8
+
+' Менеджер проєктів
+PM --> UC1
+PM --> UC2
+PM --> UC5
+PM --> UC6
+PM --> UC7
+PM --> UC9
+PM --> UC10
+PM --> UC12
+PM --> UC15
+PM --> UC16
+PM --> UC17
+
+' Розробник
+Dev --> UC1
+Dev --> UC2
+Dev --> UC11
+Dev --> UC13
+Dev --> UC14
+Dev --> UC21
+
+' Спостерігач
+Observer --> UC2
+Observer --> UC20
+Observer --> UC21
+
+' Зовнішні системи
+UC18 --> Email
+UC19 --> Calendar
+
+' Додаткові зв'язки (include/extend)
+UC5 ..> UC7 : <<include>>
+UC9 ..> UC10 : <<include>>
+
+note right of UC18
+  Автоматична відправка
+  при створенні задач,
+  зміні статусів тощо
+end note
+
+note right of UC19
+  Синхронізація дедлайнів
+  з Google Calendar,
+  Outlook тощо
+end note
+
+@enduml

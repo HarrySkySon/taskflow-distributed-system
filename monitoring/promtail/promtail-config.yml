@@ -1,0 +1,79 @@
+# Promtail Configuration for TaskFlow Log Collection
+# ЛР8 - Моніторинг і логування
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Docker containers logs
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.docker.compose.project=архітектура розподілених програмних систем_мазуренко р_ісп"]
+    relabel_configs:
+      # Container name
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+
+      # Service name from Docker Compose
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+
+      # Container ID
+      - source_labels: ['__meta_docker_container_id']
+        target_label: 'container_id'
+
+      # Project name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'project'
+
+      # Image name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_image']
+        target_label: 'image'
+
+    pipeline_stages:
+      # Parse timestamp
+      - docker: {}
+
+      # Extract log level for application logs
+      - regex:
+          expression: '(?P<level>DEBUG|INFO|WARN|WARNING|ERROR|FATAL)'
+      - labels:
+          level:
+
+      # Extract JSON logs if present
+      - json:
+          expressions:
+            message: message
+            timestamp: timestamp
+            level: level
+            service: service
+
+      # Drop healthcheck logs to reduce noise
+      - match:
+          selector: '{service=~"projects-service|notifications-service"}'
+          stages:
+            - drop:
+                expression: ".*GET /health.*200.*"
+                drop_counter_reason: "healthcheck"
+
+  # System logs (optional, for debugging)
+  # - job_name: system
+  #   static_configs:
+  #     - targets:
+  #         - localhost
+  #       labels:
+  #         job: varlogs
+  #         __path__: /var/log/*.log

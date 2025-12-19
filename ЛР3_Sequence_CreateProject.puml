@@ -1,0 +1,87 @@
+@startuml CreateProject_Sequence
+
+title Створення проєкту та додавання членів команди
+
+actor "Project Manager" as PM
+participant "API Gateway" as Gateway
+participant "Auth Middleware" as Auth
+participant "Projects Service" as Projects
+participant "Users Service" as Users
+participant "Projects DB" as ProjectsDB
+participant "RabbitMQ" as MQ
+participant "Notifications\nService" as Notifications
+
+PM -> Gateway: POST /api/projects\n{name, description, member_ids: [101, 102, 103]}\nAuthorization: Bearer <JWT>
+activate Gateway
+
+Gateway -> Auth: Validate JWT
+activate Auth
+Auth --> Gateway: Valid\n{user_id: 100, role: "project_manager"}
+deactivate Auth
+
+Gateway -> Projects: POST /projects\n{user_id: 100, name, description, member_ids}
+activate Projects
+
+' Validate all members exist
+loop For each member_id in member_ids
+    Projects -> Users: GET /users/{member_id}/validate
+    activate Users
+    Users --> Projects: {user_exists: true, email: "..."}
+    deactivate Users
+end
+
+' Create project
+Projects -> ProjectsDB: INSERT INTO projects\n(name, description, owner_id: 100,\nstatus: 'active')
+activate ProjectsDB
+ProjectsDB --> Projects: Project Created\n{project_id: 789}
+deactivate ProjectsDB
+
+' Add project members
+loop For each member_id in [100, 101, 102, 103]
+    Projects -> ProjectsDB: INSERT INTO project_members\n(project_id: 789, user_id, role)
+    activate ProjectsDB
+    ProjectsDB --> Projects: Member Added
+    deactivate ProjectsDB
+end
+
+' Publish events
+Projects -> MQ: Publish Event\n{event: "project.created",\nproject_id: 789, name, owner_id: 100}
+activate MQ
+MQ --> Projects: Published
+deactivate MQ
+
+loop For each member_id in [101, 102, 103]
+    Projects -> MQ: Publish Event\n{event: "member.added",\nproject_id: 789, user_id: member_id}
+    activate MQ
+    MQ --> Projects: Published
+    deactivate MQ
+end
+
+Projects --> Gateway: 201 Created\n{project_id: 789, name, members: [...]}
+deactivate Projects
+
+Gateway --> PM: 201 Created\n{project_id: 789, ...}
+deactivate Gateway
+
+' Asynchronous notifications to members
+loop For each member_id in [101, 102, 103]
+    MQ -> Notifications: Consume Event\n{event: "member.added", user_id}
+    activate Notifications
+
+    Notifications -> Users: GET /users/{user_id}
+    activate Users
+    Users --> Notifications: {email, first_name}
+    deactivate Users
+
+    Notifications -> Notifications: Send Email:\n"You've been added to project: {name}"
+
+    deactivate Notifications
+end
+
+note right of Notifications
+  Кожен член команди отримує
+  персональне email повідомлення
+  про додавання до проєкту
+end note
+
+@enduml

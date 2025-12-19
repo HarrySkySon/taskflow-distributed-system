@@ -1,0 +1,32 @@
+version: '3.8'
+
+# Файл для масштабування сервісів
+# Використання: docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d
+
+services:
+  # Масштабування Projects Service
+  projects-service:
+    deploy:
+      replicas: 3  # Кількість реплік
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+
+  # Масштабування Notifications Service (опціонально)
+  notifications-service:
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s

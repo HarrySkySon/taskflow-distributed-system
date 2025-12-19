@@ -1,0 +1,94 @@
+@startuml GenerateReport_Sequence
+
+title Генерація аналітичного звіту проєкту
+
+actor "Project Manager" as PM
+participant "API Gateway" as Gateway
+participant "Auth Middleware" as Auth
+participant "Analytics Service" as Analytics
+participant "Analytics DB" as AnalyticsDB
+participant "Projects Service" as Projects
+participant "Tasks Service" as Tasks
+participant "Users Service" as Users
+participant "Report Generator" as ReportGen
+participant "File Storage" as Storage
+
+PM -> Gateway: POST /api/analytics/reports/generate\n{project_id: 10, report_type: "burndown",\nformat: "pdf", date_range: {...}}\nAuthorization: Bearer <JWT>
+activate Gateway
+
+Gateway -> Auth: Validate JWT
+activate Auth
+Auth --> Gateway: Valid\n{user_id: 100, role: "project_manager"}
+deactivate Auth
+
+Gateway -> Analytics: POST /reports/generate\n{user_id: 100, project_id: 10, ...}
+activate Analytics
+
+' Verify user has access to project
+Analytics -> Projects: GET /projects/10/members/{user_id}
+activate Projects
+Projects --> Analytics: {is_member: true, role: "owner"}
+deactivate Projects
+
+' Collect data from Analytics DB
+Analytics -> AnalyticsDB: SELECT * FROM task_events\nWHERE project_id = 10\nAND timestamp BETWEEN ? AND ?
+activate AnalyticsDB
+AnalyticsDB --> Analytics: Task events data
+deactivate AnalyticsDB
+
+Analytics -> AnalyticsDB: SELECT * FROM task_metrics\nWHERE project_id = 10
+activate AnalyticsDB
+AnalyticsDB --> Analytics: Aggregated metrics
+deactivate AnalyticsDB
+
+' Get additional data from other services
+Analytics -> Tasks: GET /tasks?project_id=10&include_history=true
+activate Tasks
+Tasks --> Analytics: {tasks: [...], total: 45}
+deactivate Tasks
+
+Analytics -> Users: GET /users?project_id=10
+activate Users
+Users --> Analytics: {users: [...]}
+deactivate Users
+
+' Generate report
+Analytics -> ReportGen: Generate Burndown Report\n(data, format: "pdf")
+activate ReportGen
+
+ReportGen -> ReportGen: Calculate ideal burndown line
+ReportGen -> ReportGen: Calculate actual burndown
+ReportGen -> ReportGen: Create charts (Chart.js)
+ReportGen -> ReportGen: Generate PDF (PDFKit)
+
+ReportGen --> Analytics: PDF Buffer
+deactivate ReportGen
+
+' Upload to file storage
+Analytics -> Storage: PUT /reports/project-10-burndown-{timestamp}.pdf\nBuffer
+activate Storage
+Storage --> Analytics: {file_url: "https://storage.../report.pdf"}
+deactivate Storage
+
+' Save report metadata
+Analytics -> AnalyticsDB: INSERT INTO generated_reports\n(project_id, type, format, file_url,\ngenerated_by, generated_at)
+activate AnalyticsDB
+AnalyticsDB --> Analytics: Report Saved
+deactivate AnalyticsDB
+
+Analytics --> Gateway: 200 OK\n{report_id: 999, file_url: "...",\ngenerated_at: "..."}
+deactivate Analytics
+
+Gateway --> PM: 200 OK\n{report_id: 999, download_url: "..."}
+deactivate Gateway
+
+PM -> PM: Download PDF report from URL
+
+note right of Analytics
+  Синхронна генерація звіту
+  Для великих проєктів краще
+  використовувати асинхронну
+  обробку через черги
+end note
+
+@enduml

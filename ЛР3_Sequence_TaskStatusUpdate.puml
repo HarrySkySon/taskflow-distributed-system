@@ -1,0 +1,94 @@
+@startuml TaskStatusUpdate_Sequence
+
+title Зміна статусу задачі розробником
+
+actor "Developer" as Dev
+participant "API Gateway" as Gateway
+participant "Auth Middleware" as Auth
+participant "Tasks Service" as Tasks
+participant "Tasks DB" as TasksDB
+participant "RabbitMQ" as MQ
+participant "Analytics\nService" as Analytics
+participant "Analytics DB" as AnalyticsDB
+participant "Notifications\nService" as Notifications
+
+Dev -> Gateway: PATCH /api/tasks/123/status\n{status: "in_progress"}\nAuthorization: Bearer <JWT>
+activate Gateway
+
+Gateway -> Auth: Validate JWT
+activate Auth
+Auth --> Gateway: Valid\n{user_id: 50, role: "developer"}
+deactivate Auth
+
+Gateway -> Tasks: PATCH /tasks/123/status\n{user_id: 50, status: "in_progress"}
+activate Tasks
+
+' Get current task
+Tasks -> TasksDB: SELECT * FROM tasks\nWHERE id = 123
+activate TasksDB
+TasksDB --> Tasks: {id: 123, status: "new",\nassigned_to: 50, project_id: 10}
+deactivate TasksDB
+
+' Check permissions
+Tasks -> Tasks: Check if user_id == assigned_to\nOR user has permission
+note right of Tasks
+  Тільки призначений виконавець
+  або PM може змінити статус
+end note
+
+' Update status
+Tasks -> TasksDB: UPDATE tasks\nSET status = 'in_progress',\nupdated_at = NOW()\nWHERE id = 123
+activate TasksDB
+TasksDB --> Tasks: Updated
+deactivate TasksDB
+
+' Record status history
+Tasks -> TasksDB: INSERT INTO task_status_history\n(task_id: 123, old_status: 'new',\nnew_status: 'in_progress', changed_by: 50)
+activate TasksDB
+TasksDB --> Tasks: History Recorded
+deactivate TasksDB
+
+' Publish event
+Tasks -> MQ: Publish Event\n{event: "task.status_changed",\ntask_id: 123, old_status: "new",\nnew_status: "in_progress",\nchanged_by: 50, project_id: 10}
+activate MQ
+MQ --> Tasks: Published
+deactivate MQ
+
+Tasks --> Gateway: 200 OK\n{id: 123, status: "in_progress", ...}
+deactivate Tasks
+
+Gateway --> Dev: 200 OK\n{id: 123, status: "in_progress"}
+deactivate Gateway
+
+' Analytics Service consumes event
+MQ -> Analytics: Consume Event\n{event: "task.status_changed", ...}
+activate Analytics
+
+Analytics -> AnalyticsDB: INSERT INTO task_events\n(task_id, event_type, old_status,\nnew_status, timestamp, user_id)
+activate AnalyticsDB
+AnalyticsDB --> Analytics: Event Stored
+deactivate AnalyticsDB
+
+Analytics -> AnalyticsDB: UPDATE task_metrics\nSET in_progress_count = in_progress_count + 1,\nnew_count = new_count - 1\nWHERE project_id = 10
+activate AnalyticsDB
+AnalyticsDB --> Analytics: Metrics Updated
+deactivate AnalyticsDB
+
+deactivate Analytics
+
+' Notifications Service consumes event
+MQ -> Notifications: Consume Event\n{event: "task.status_changed", ...}
+activate Notifications
+
+Notifications -> Notifications: Determine recipients\n(project manager, task creator)
+
+Notifications -> Notifications: Send notification:\n"Task #123 status changed to In Progress"
+
+deactivate Notifications
+
+note right of Analytics
+  Analytics Service збирає метрики
+  для burndown charts та звітів
+end note
+
+@enduml

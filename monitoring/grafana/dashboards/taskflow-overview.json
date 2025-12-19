@@ -1,0 +1,391 @@
+{
+  "dashboard": {
+    "title": "TaskFlow System Overview",
+    "tags": ["taskflow", "microservices", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Architecture",
+        "type": "text",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 3
+        },
+        "options": {
+          "mode": "markdown",
+          "content": "# TaskFlow Distributed System Monitoring\n\n**Components:** Projects Service | Notifications Service | PostgreSQL | RabbitMQ | Prometheus | Grafana | Loki\n\n**ЛР8:** Моніторинг і логування розподіленої системи"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Services Health Status",
+        "type": "stat",
+        "gridPos": {
+          "x": 0,
+          "y": 3,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "up{job=~\"projects-service|notifications-service\"}",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "type": "value",
+                "options": {
+                  "0": {
+                    "text": "DOWN",
+                    "color": "red"
+                  },
+                  "1": {
+                    "text": "UP",
+                    "color": "green"
+                  }
+                }
+              }
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "red"
+                },
+                {
+                  "value": 1,
+                  "color": "green"
+                }
+              ]
+            }
+          }
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Total Requests (RPS)",
+        "type": "graph",
+        "gridPos": {
+          "x": 6,
+          "y": 3,
+          "w": 9,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"projects-service\"}[5m])",
+            "legendFormat": "Projects Service",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"notifications-service\"}[5m])",
+            "legendFormat": "Notifications Service",
+            "refId": "B"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "yaxes": [
+          {
+            "label": "requests/sec",
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Average Response Time",
+        "type": "graph",
+        "gridPos": {
+          "x": 15,
+          "y": 3,
+          "w": 9,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "rate(http_request_duration_seconds_sum{job=\"projects-service\"}[5m]) / rate(http_request_duration_seconds_count{job=\"projects-service\"}[5m])",
+            "legendFormat": "Projects Service",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_request_duration_seconds_sum{job=\"notifications-service\"}[5m]) / rate(http_request_duration_seconds_count{job=\"notifications-service\"}[5m])",
+            "legendFormat": "Notifications Service",
+            "refId": "B"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "yaxes": [
+          {
+            "label": "seconds",
+            "format": "s"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "HTTP Status Codes",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 7,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"projects-service\",status=~\"2..\"}[5m])",
+            "legendFormat": "2xx Success",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"projects-service\",status=~\"4..\"}[5m])",
+            "legendFormat": "4xx Client Error",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"projects-service\",status=~\"5..\"}[5m])",
+            "legendFormat": "5xx Server Error",
+            "refId": "C"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        }
+      },
+      {
+        "id": 6,
+        "title": "RabbitMQ Messages Rate",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 7,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "rate(rabbitmq_global_messages_received_total[5m])",
+            "legendFormat": "Messages Received",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(rabbitmq_global_messages_delivered_total[5m])",
+            "legendFormat": "Messages Delivered",
+            "refId": "B"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "yaxes": [
+          {
+            "label": "messages/sec",
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Memory Usage",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 13,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "process_resident_memory_bytes{job=\"projects-service\"}",
+            "legendFormat": "Projects Service",
+            "refId": "A"
+          },
+          {
+            "expr": "process_resident_memory_bytes{job=\"notifications-service\"}",
+            "legendFormat": "Notifications Service",
+            "refId": "B"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "yaxes": [
+          {
+            "label": "bytes",
+            "format": "bytes"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 13,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"projects-service\"}[5m])",
+            "legendFormat": "Projects Service",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"notifications-service\"}[5m])",
+            "legendFormat": "Notifications Service",
+            "refId": "B"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "yaxes": [
+          {
+            "label": "CPU cores",
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Event Processing Metrics",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 19,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "rate(events_published_total{job=\"projects-service\"}[5m])",
+            "legendFormat": "Events Published",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(events_consumed_total{job=\"notifications-service\"}[5m])",
+            "legendFormat": "Events Consumed",
+            "refId": "B"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "yaxes": [
+          {
+            "label": "events/sec",
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Database Connections",
+        "type": "stat",
+        "gridPos": {
+          "x": 12,
+          "y": 19,
+          "w": 6,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "db_connections_active{job=\"projects-service\"}",
+            "legendFormat": "Active",
+            "refId": "A"
+          }
+        ],
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Application Logs",
+        "type": "logs",
+        "gridPos": {
+          "x": 0,
+          "y": 25,
+          "w": 24,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "{service=~\"projects-service|notifications-service\"}",
+            "refId": "A"
+          }
+        ],
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "showCommonLabels": false,
+          "wrapLogMessage": true,
+          "prettifyLogMessage": false,
+          "enableLogDetails": true,
+          "dedupStrategy": "none",
+          "sortOrder": "Descending"
+        }
+      }
+    ]
+  }
+}

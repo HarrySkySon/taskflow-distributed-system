@@ -1,0 +1,307 @@
+@startuml TaskFlow_Deployment_Diagram
+
+!define ICONURL https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/v2.4.0
+!include ICONURL/devicons2/kubernetes.puml
+!include ICONURL/devicons2/docker.puml
+!include ICONURL/devicons2/postgresql.puml
+!include ICONURL/devicons2/redis.puml
+!include ICONURL/devicons2/nginx.puml
+!include ICONURL/devicons2/nodejs.puml
+!include ICONURL/devicons2/python.puml
+
+title Deployment Diagram - TaskFlow System (Production Environment)
+
+' Client Devices
+node "Client Browser" as client <<device>> {
+  artifact "React SPA" as react_app
+}
+
+node "Mobile Device" as mobile <<device>> {
+  artifact "Mobile App" as mobile_app
+}
+
+' Edge Layer - Load Balancer
+node "Load Balancer" as lb <<nginx>> {
+  component "Nginx" as nginx <<DEV2_NGINX>>
+  artifact "SSL/TLS\nCertificates" as ssl
+}
+
+' Kubernetes Cluster
+cloud "Kubernetes Cluster" as k8s <<kubernetes>> {
+
+  ' API Gateway Pods
+  node "API Gateway Pod (x3)" as gateway_pod <<pod>> {
+    component "API Gateway\nNode.js 20" as gateway <<DEV2_NODEJS>> {
+      artifact "Express.js\nTypeScript" as gateway_app
+    }
+  }
+
+  ' Users Service Pods
+  node "Users Service Pod (x3)" as users_pod <<pod>> {
+    component "Users Service\nNode.js 20" as users_svc <<DEV2_NODEJS>> {
+      artifact "Express + Prisma\nTypeScript" as users_app
+    }
+  }
+
+  ' Projects Service Pods
+  node "Projects Service Pod (x3)" as projects_pod <<pod>> {
+    component "Projects Service\nNode.js 20" as projects_svc <<DEV2_NODEJS>> {
+      artifact "Express + Prisma\nTypeScript" as projects_app
+    }
+  }
+
+  ' Tasks Service Pods
+  node "Tasks Service Pod (x3)" as tasks_pod <<pod>> {
+    component "Tasks Service\nNode.js 20" as tasks_svc <<DEV2_NODEJS>> {
+      artifact "Express + Prisma\nTypeScript" as tasks_app
+    }
+  }
+
+  ' Notifications Service Pods
+  node "Notifications Service Pod (x2)" as notif_pod <<pod>> {
+    component "Notifications Service\nNode.js 20" as notif_svc <<DEV2_NODEJS>> {
+      artifact "Express + Nodemailer\nTypeScript" as notif_app
+    }
+  }
+
+  ' Analytics Service Pods
+  node "Analytics Service Pod (x2)" as analytics_pod <<pod>> {
+    component "Analytics Service\nPython 3.12" as analytics_svc <<DEV2_PYTHON>> {
+      artifact "FastAPI + Pandas\nReportLab" as analytics_app
+    }
+  }
+
+}
+
+' Database Cluster
+database "PostgreSQL Cluster" as pg_cluster <<postgresql>> {
+  node "PostgreSQL Primary" as pg_primary <<DEV2_POSTGRESQL>> {
+    database "users_db" as users_db
+    database "projects_db" as projects_db
+    database "tasks_db" as tasks_db
+    database "notifications_db" as notif_db
+    database "analytics_db" as analytics_db
+  }
+
+  node "PostgreSQL Replica 1" as pg_replica1 <<DEV2_POSTGRESQL>> {
+    database "Read Replicas" as replicas1
+  }
+
+  node "PostgreSQL Replica 2" as pg_replica2 <<DEV2_POSTGRESQL>> {
+    database "Read Replicas" as replicas2
+  }
+}
+
+' Message Broker Cluster
+node "RabbitMQ Cluster" as rabbitmq_cluster {
+  node "RabbitMQ Node 1" as rmq1 <<server>> {
+    component "RabbitMQ\n3.12" as rmq1_svc
+  }
+
+  node "RabbitMQ Node 2" as rmq2 <<server>> {
+    component "RabbitMQ\n3.12" as rmq2_svc
+  }
+
+  node "RabbitMQ Node 3" as rmq3 <<server>> {
+    component "RabbitMQ\n3.12" as rmq3_svc
+  }
+}
+
+' Caching Layer
+node "Redis Cluster" as redis_cluster {
+  node "Redis Primary" as redis_primary <<DEV2_REDIS>> {
+    component "Redis 7.2" as redis_primary_svc
+  }
+
+  node "Redis Replica" as redis_replica <<DEV2_REDIS>> {
+    component "Redis 7.2" as redis_replica_svc
+  }
+}
+
+' Object Storage
+cloud "MinIO Cluster" as minio_cluster {
+  node "MinIO Node 1" as minio1 <<server>> {
+    component "MinIO" as minio1_svc
+    database "Storage 1" as storage1
+  }
+
+  node "MinIO Node 2" as minio2 <<server>> {
+    component "MinIO" as minio2_svc
+    database "Storage 2" as storage2
+  }
+}
+
+' Monitoring & Logging
+node "Monitoring Server" as monitoring <<server>> {
+  component "Prometheus" as prometheus
+  component "Grafana" as grafana
+}
+
+node "Logging Server" as logging <<server>> {
+  component "Elasticsearch" as elasticsearch
+  component "Logstash" as logstash
+  component "Kibana" as kibana
+}
+
+' External Services
+cloud "External Services" {
+  node "SMTP Server" as smtp <<external>> {
+    component "Email Service\n(SendGrid/AWS SES)" as smtp_svc
+  }
+
+  node "File Storage" as s3 <<external>> {
+    component "AWS S3 Backup" as s3_svc
+  }
+}
+
+' Client connections
+client --> lb : HTTPS\n(443)
+mobile --> lb : HTTPS\n(443)
+
+' Load Balancer to API Gateway
+lb --> gateway_pod : HTTP\n(3000)
+
+' API Gateway to Services
+gateway_pod --> users_pod : HTTP\n(4001)
+gateway_pod --> projects_pod : HTTP\n(4002)
+gateway_pod --> tasks_pod : HTTP\n(4003)
+gateway_pod --> notif_pod : HTTP\n(4004)
+gateway_pod --> analytics_pod : HTTP\n(4005)
+
+' Inter-service communication
+projects_pod --> users_pod : HTTP\n(Validate Users)
+tasks_pod --> projects_pod : HTTP\n(Validate Projects)
+tasks_pod --> users_pod : HTTP\n(Validate Users)
+analytics_pod --> users_pod : HTTP\n(Get Data)
+analytics_pod --> projects_pod : HTTP\n(Get Data)
+analytics_pod --> tasks_pod : HTTP\n(Get Data)
+
+' Services to PostgreSQL
+users_pod --> pg_primary : TCP\n5432\n(Write)
+projects_pod --> pg_primary : TCP\n5432\n(Write)
+tasks_pod --> pg_primary : TCP\n5432\n(Write)
+notif_pod --> pg_primary : TCP\n5432\n(Write)
+analytics_pod --> pg_primary : TCP\n5432\n(Write)
+
+' Read operations to replicas
+analytics_pod --> pg_replica1 : TCP\n5432\n(Read)
+analytics_pod --> pg_replica2 : TCP\n5432\n(Read)
+
+' PostgreSQL replication
+pg_primary --> pg_replica1 : Streaming\nReplication
+pg_primary --> pg_replica2 : Streaming\nReplication
+
+' Services to RabbitMQ
+users_pod --> rabbitmq_cluster : AMQP\n5672\n(Publish)
+projects_pod --> rabbitmq_cluster : AMQP\n5672\n(Publish)
+tasks_pod --> rabbitmq_cluster : AMQP\n5672\n(Publish)
+notif_pod --> rabbitmq_cluster : AMQP\n5672\n(Consume)
+analytics_pod --> rabbitmq_cluster : AMQP\n5672\n(Consume)
+
+' RabbitMQ cluster
+rmq1 <--> rmq2 : Cluster
+rmq2 <--> rmq3 : Cluster
+rmq3 <--> rmq1 : Cluster
+
+' Services to Redis
+gateway_pod --> redis_cluster : TCP\n6379\n(Rate Limiting)
+users_pod --> redis_cluster : TCP\n6379\n(Caching)
+projects_pod --> redis_cluster : TCP\n6379\n(Caching)
+tasks_pod --> redis_cluster : TCP\n6379\n(Caching)
+notif_pod --> redis_cluster : TCP\n6379\n(Idempotency)
+
+' Redis replication
+redis_primary --> redis_replica : Replication
+
+' Services to MinIO
+tasks_pod --> minio_cluster : S3 API\n9000\n(File Upload)
+analytics_pod --> minio_cluster : S3 API\n9000\n(Reports)
+users_pod --> minio_cluster : S3 API\n9000\n(Avatars)
+
+' MinIO cluster
+minio1 <--> minio2 : Distributed\nMode
+
+' Notifications to SMTP
+notif_pod --> smtp : SMTP\n587/465
+
+' Backup to S3
+pg_primary --> s3 : Backup\n(Daily)
+minio_cluster --> s3 : Backup\n(Daily)
+
+' Monitoring connections
+gateway_pod --> monitoring : Metrics\n(Prometheus)
+users_pod --> monitoring : Metrics
+projects_pod --> monitoring : Metrics
+tasks_pod --> monitoring : Metrics
+notif_pod --> monitoring : Metrics
+analytics_pod --> monitoring : Metrics
+rabbitmq_cluster --> monitoring : Metrics
+pg_cluster --> monitoring : Metrics
+redis_cluster --> monitoring : Metrics
+
+' Logging connections
+gateway_pod --> logging : Logs\n(JSON)
+users_pod --> logging : Logs
+projects_pod --> logging : Logs
+tasks_pod --> logging : Logs
+notif_pod --> logging : Logs
+analytics_pod --> logging : Logs
+
+' Notes
+note right of k8s
+  **Kubernetes Cluster**
+  - 3+ Master Nodes
+  - 6+ Worker Nodes
+  - Horizontal Pod Autoscaler
+  - Rolling Updates
+  - Self-Healing
+end note
+
+note right of pg_cluster
+  **PostgreSQL HA**
+  - Primary-Replica setup
+  - Automatic failover (Patroni)
+  - Daily backups to S3
+  - Point-in-time recovery
+end note
+
+note right of rabbitmq_cluster
+  **RabbitMQ Cluster**
+  - 3-node cluster
+  - Mirrored queues
+  - High availability
+  - Management UI: 15672
+end note
+
+note bottom of redis_cluster
+  **Redis Sentinel**
+  - Automatic failover
+  - Read/Write split
+  - Persistence enabled
+end note
+
+note bottom of minio_cluster
+  **MinIO Distributed**
+  - Erasure coding
+  - S3-compatible API
+  - Versioning enabled
+  - Lifecycle policies
+end note
+
+note bottom of monitoring
+  **Observability Stack**
+  - Prometheus: Metrics
+  - Grafana: Dashboards
+  - Alerts: PagerDuty
+  - Uptime: 99.9% SLA
+end note
+
+note bottom of logging
+  **Centralized Logging**
+  - 30-day retention
+  - Full-text search
+  - Real-time analysis
+  - Log correlation
+end note
+
+@enduml

@@ -1,0 +1,102 @@
+@startuml TaskFlow_Context_Diagram
+!define RECTANGLE class
+
+skinparam componentStyle rectangle
+
+' Актори
+actor "Користувач\n(Web Browser)" as User
+actor "Адміністратор" as Admin
+actor "Мобільний\nкористувач" as Mobile
+actor "Зовнішні системи\n(API Clients)" as ExtAPI
+
+' Центральна система
+component "TaskFlow System" as TaskFlow {
+  [API Gateway]
+  [Users Service]
+  [Projects Service]
+  [Tasks Service]
+  [Notifications Service]
+  [Analytics Service]
+}
+
+' Бази даних та сховища
+database "PostgreSQL\nDatabase" as DB
+queue "RabbitMQ\nMessage Broker" as MQ
+
+' Зовнішні сервіси
+cloud "Email Service\n(SMTP)" as Email
+cloud "Calendar Service\n(Google/Outlook)" as Calendar
+storage "File Storage\n(MinIO/S3)" as Storage
+
+' Моніторинг та логування
+component "Monitoring\n(Prometheus/Grafana)" as Monitor
+component "Logging\n(ELK Stack)" as Logs
+
+' Взаємодія користувачів з системою
+User -down-> TaskFlow : "HTTPS Requests\n(REST API)\nJSON"
+Admin -down-> TaskFlow : "HTTPS Requests\n(Admin Panel)\nJSON"
+Mobile -down-> TaskFlow : "HTTPS Requests\n(Mobile API)\nJSON"
+ExtAPI -down-> TaskFlow : "REST API Calls\nWebhooks\nJSON"
+
+' Відповіді від системи
+TaskFlow -up-> User : "HTTP Responses\nHTML/CSS/JS"
+TaskFlow -up-> Admin : "HTTP Responses\nJSON"
+TaskFlow -up-> Mobile : "HTTP Responses\nJSON"
+TaskFlow -up-> ExtAPI : "HTTP Responses\nWebhook Events"
+
+' Взаємодія з базою даних
+TaskFlow -right-> DB : "SQL Queries\n(Read/Write)\nTransactions"
+DB -left-> TaskFlow : "Query Results"
+
+' Взаємодія з черговю повідомлень
+TaskFlow -down-> MQ : "Publish Messages\n(Events)"
+MQ -up-> TaskFlow : "Consume Messages\n(Async)"
+
+' Зовнішні сервіси
+TaskFlow -right-> Email : "Send Emails\n(SMTP)\nTemplates"
+TaskFlow -right-> Calendar : "Sync Events\n(OAuth 2.0)\nCalDAV"
+TaskFlow -right-> Storage : "Store/Retrieve Files\n(S3 API)"
+
+' Зворотній зв'язок від зовнішніх сервісів
+Email -left-> TaskFlow : "Delivery Status"
+Calendar -left-> TaskFlow : "Event Updates"
+Storage -left-> TaskFlow : "File URLs"
+
+' Моніторинг та логування
+TaskFlow -down-> Monitor : "Export Metrics\n(Prometheus)"
+TaskFlow -down-> Logs : "Send Logs\n(JSON)"
+
+Monitor -up-> Admin : "Alerts\nDashboards"
+Logs -up-> Admin : "Log Analysis\nSearch Results"
+
+' Примітки
+note top of TaskFlow
+  Центральна розподілена система
+  Складається з 6 мікросервісів
+  Взаємодіє через REST API та RabbitMQ
+end note
+
+note right of DB
+  Реляційна база даних
+  Схема: users, projects, tasks
+  Backup: щоденно
+  Replication: майбутнє
+end note
+
+note right of MQ
+  Асинхронна обробка:
+  - Email notifications
+  - Push notifications
+  - Analytics events
+  - Audit logs
+end note
+
+note bottom of Storage
+  Зберігання:
+  - User avatars
+  - Task attachments
+  - Export files (PDF, Excel)
+  Max file size: 10 MB
+end note
+
+@enduml

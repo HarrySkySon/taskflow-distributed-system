@@ -1,0 +1,105 @@
+@startuml TaskFlow_Component_Diagram
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram - TaskFlow System (C4 Level 2)
+
+Person(user, "User", "Web Browser")
+Person(admin, "Administrator", "System Admin")
+
+System_Boundary(gateway, "API Gateway") {
+    Component(auth_middleware, "Auth Middleware", "JWT Validation")
+    Component(rate_limiter, "Rate Limiter", "Request Throttling")
+    Component(router, "Router", "Request Routing")
+}
+
+System_Boundary(users, "Users Service") {
+    Component(users_api, "Users API", "REST API", "Express.js")
+    Component(users_auth, "Auth Module", "JWT Generation")
+    Component(users_service, "Users Business Logic", "Registration, Login")
+    ComponentDb(users_db, "Users Database", "PostgreSQL", "users, roles, tokens")
+}
+
+System_Boundary(projects, "Projects Service") {
+    Component(projects_api, "Projects API", "REST API", "Express.js")
+    Component(projects_service, "Projects Business Logic", "CRUD Projects")
+    ComponentDb(projects_db, "Projects Database", "PostgreSQL", "projects, members")
+}
+
+System_Boundary(tasks, "Tasks Service") {
+    Component(tasks_api, "Tasks API", "REST API", "Express.js")
+    Component(tasks_service, "Tasks Business Logic", "CRUD Tasks")
+    ComponentDb(tasks_db, "Tasks Database", "PostgreSQL", "tasks, comments, attachments")
+}
+
+System_Boundary(notifications, "Notifications Service") {
+    Component(notifications_api, "Notifications API", "REST API", "Express.js")
+    Component(notifications_consumer, "Event Consumer", "RabbitMQ Consumer")
+    Component(email_sender, "Email Sender", "SMTP Client")
+    ComponentDb(notifications_db, "Notifications DB", "PostgreSQL", "notifications, preferences")
+}
+
+System_Boundary(analytics, "Analytics Service") {
+    Component(analytics_api, "Analytics API", "REST API", "FastAPI")
+    Component(analytics_consumer, "Event Consumer", "RabbitMQ Consumer")
+    Component(report_generator, "Report Generator", "PDF/Excel Generation")
+    ComponentDb(analytics_db, "Analytics DB", "PostgreSQL", "metrics, events")
+}
+
+System_Ext(rabbitmq, "RabbitMQ", "Message Broker")
+System_Ext(smtp, "SMTP Server", "Email Delivery")
+System_Ext(storage, "File Storage", "MinIO/S3")
+
+' User interactions
+Rel(user, router, "HTTPS Requests", "JSON")
+Rel(admin, router, "HTTPS Requests", "JSON")
+
+' API Gateway routing
+Rel(router, auth_middleware, "Validate Token")
+Rel(router, rate_limiter, "Check Limits")
+Rel(router, users_api, "Route /api/auth/*", "HTTP")
+Rel(router, users_api, "Route /api/users/*", "HTTP")
+Rel(router, projects_api, "Route /api/projects/*", "HTTP")
+Rel(router, tasks_api, "Route /api/tasks/*", "HTTP")
+Rel(router, notifications_api, "Route /api/notifications/*", "HTTP")
+Rel(router, analytics_api, "Route /api/analytics/*", "HTTP")
+
+' Users Service
+Rel(users_api, users_service, "Business Logic")
+Rel(users_service, users_auth, "Generate JWT")
+Rel(users_service, users_db, "SQL Queries", "PostgreSQL")
+Rel(users_service, rabbitmq, "Publish Events", "user.registered, user.verified")
+
+' Projects Service
+Rel(projects_api, projects_service, "Business Logic")
+Rel(projects_service, projects_db, "SQL Queries", "PostgreSQL")
+Rel(projects_service, users_api, "Validate Users", "HTTP")
+Rel(projects_service, rabbitmq, "Publish Events", "project.created, member.added")
+
+' Tasks Service
+Rel(tasks_api, tasks_service, "Business Logic")
+Rel(tasks_service, tasks_db, "SQL Queries", "PostgreSQL")
+Rel(tasks_service, projects_api, "Validate Project", "HTTP")
+Rel(tasks_service, users_api, "Validate Users", "HTTP")
+Rel(tasks_service, storage, "Upload Files", "S3 API")
+Rel(tasks_service, rabbitmq, "Publish Events", "task.created, task.assigned")
+
+' Notifications Service
+Rel(notifications_api, notifications_db, "SQL Queries", "PostgreSQL")
+Rel(notifications_consumer, rabbitmq, "Consume Events", "AMQP")
+Rel(notifications_consumer, email_sender, "Send Email")
+Rel(email_sender, smtp, "SMTP Protocol")
+Rel(notifications_consumer, users_api, "Get User Info", "HTTP")
+Rel(notifications_consumer, notifications_db, "Store Notification")
+
+' Analytics Service
+Rel(analytics_api, analytics_db, "SQL Queries", "PostgreSQL")
+Rel(analytics_api, report_generator, "Generate Report")
+Rel(analytics_consumer, rabbitmq, "Consume Events", "AMQP")
+Rel(analytics_consumer, analytics_db, "Store Metrics")
+Rel(analytics_api, tasks_api, "Get Tasks Data", "HTTP")
+Rel(analytics_api, projects_api, "Get Projects Data", "HTTP")
+Rel(analytics_api, users_api, "Get Users Data", "HTTP")
+
+@enduml
